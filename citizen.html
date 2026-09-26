@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>My Complaints</title>
+<link rel="stylesheet" href="/common.css">
+<style>
+  .wrap { max-width: 760px; margin: 0 auto; }
+  .case .head { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .case .id { font-weight: 700; font-size: 17px; }
+  .case .what { margin: 6px 0 2px; font-size: 16px; }
+  .steps { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin: 14px 0 6px; }
+  .step { text-align: center; font-size: 12px; color: var(--muted); }
+  .step .dot { height: 6px; border-radius: 3px; background: var(--line); margin-bottom: 6px; }
+  .step.done .dot { background: var(--good); }
+  .step.now .dot { background: var(--accent); }
+  .step.done, .step.now { color: var(--ink); }
+  .reopen { color: var(--bad); font-size: 13px; margin-top: 4px; }
+  details { margin-top: 10px; }
+  summary { cursor: pointer; color: var(--muted); }
+  .tl { list-style: none; padding: 0; margin: 8px 0 0; border-left: 2px solid var(--line); }
+  .tl li { padding: 4px 0 8px 12px; position: relative; }
+  .tl li::before { content: ""; position: absolute; left: -6px; top: 10px; width: 10px; height: 10px;
+    border-radius: 50%; background: var(--panel); border: 2px solid var(--muted); }
+  .tl .when { color: var(--muted); font-size: 13px; }
+  .proof { margin-top: 12px; }
+  .proof img { max-width: 100%; max-height: 280px; border-radius: 10px; border: 1px solid var(--line); display: block; }
+  .action { margin-top: 10px; padding: 10px 12px; border-radius: 10px; background: var(--soft);
+    border: 1px solid var(--warn); }
+</style>
+</head>
+<body>
+<header class="top">
+  <h1>Griev<span>Eye</span></h1>
+  <div class="sub" id="who"></div>
+</header>
+<div class="wrap" id="app"><div class="empty">Loading…</div></div>
+
+<script>
+const token = new URLSearchParams(location.search).get("t");
+const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const T = {
+  en: { mine: "My complaints", none: "You have not filed any complaint yet. Send one to the bot on Telegram.",
+        steps: ["Filed", "With officer", "Officer says fixed", "Confirmed by you"], history: "History",
+        proof: "Officer's proof photo", yours: "Your photo", voice: "Your voice note", withp: "With",
+        act: "The officer says this is fixed. Please answer Yes / Partly / No in Telegram.",
+        reopened: (n) => `You said "not fixed" ${n} time(s)`, rated: "Your rating",
+        appealHint: (id) => `If this is wrong, send /appeal ${id} to the bot.`,
+        appealPending: "Your appeal is with the senior officer.", appealNo: "Your appeal was not accepted." },
+  kn: { mine: "ನನ್ನ ದೂರುಗಳು", none: "ನೀವು ಇನ್ನೂ ಯಾವುದೇ ದೂರು ನೀಡಿಲ್ಲ. ಟೆಲಿಗ್ರಾಂನಲ್ಲಿ ಬಾಟ್‌ಗೆ ಕಳುಹಿಸಿ.",
+        steps: ["ದಾಖಲಾಗಿದೆ", "ಅಧಿಕಾರಿ ಬಳಿ", "ಬಗೆಹರಿದಿದೆ ಎಂದು ಅಧಿಕಾರಿ", "ನೀವು ದೃಢೀಕರಿಸಿದ್ದೀರಿ"], history: "ಇತಿಹಾಸ",
+        proof: "ಅಧಿಕಾರಿಯ ಪುರಾವೆ ಫೋಟೋ", yours: "ನಿಮ್ಮ ಫೋಟೋ", voice: "ನಿಮ್ಮ ಧ್ವನಿ ಸಂದೇಶ", withp: "ಅಧಿಕಾರಿ",
+        act: "ಸಮಸ್ಯೆ ಬಗೆಹರಿದಿದೆ ಎಂದು ಅಧಿಕಾರಿ ಹೇಳುತ್ತಾರೆ. ದಯವಿಟ್ಟು ಟೆಲಿಗ್ರಾಂನಲ್ಲಿ ಹೌದು / ಭಾಗಶಃ / ಇಲ್ಲ ಉತ್ತರಿಸಿ.",
+        reopened: (n) => `ನೀವು ${n} ಬಾರಿ "ಬಗೆಹರಿದಿಲ್ಲ" ಎಂದಿದ್ದೀರಿ`, rated: "ನಿಮ್ಮ ಅಂಕ",
+        appealHint: (id) => `ಇದು ತಪ್ಪಾಗಿದ್ದರೆ, ಬಾಟ್‌ಗೆ /appeal ${id} ಕಳುಹಿಸಿ.`,
+        appealPending: "ನಿಮ್ಮ ಮೇಲ್ಮನವಿ ಹಿರಿಯ ಅಧಿಕಾರಿಯ ಬಳಿ ಇದೆ.", appealNo: "ನಿಮ್ಮ ಮೇಲ್ಮನವಿ ತಿರಸ್ಕರಿಸಲಾಗಿದೆ." },
+};
+const STEP = { REJECTED: 0, TRIAGE: 0, OPEN: 1, ESCALATED: 1, REOPENED: 1, ACCEPTED: 1, RESOLVED_PENDING: 2, VERIFIED: 3, RESOLVED_UNVERIFIED: 3 };
+const TONE = { REJECTED: "bad", REOPENED: "bad", ESCALATED: "bad", VERIFIED: "good", RESOLVED_PENDING: "warn", ACCEPTED: "warn" };
+let lastKey = "";
+
+const when = (ts) => new Date(ts * 1000).toLocaleString([], { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+
+function render(d) {
+  const L = T[d.language] || T.en;
+  document.title = L.mine;
+  $who.textContent = `${L.mine}${d.name ? " · " + d.name : ""}`;
+  if (!d.cases.length) { $app.innerHTML = `<div class="card empty">${L.none}</div>`; return; }
+  $app.innerHTML = d.cases.map((c) => {
+    const at = STEP[c.status];
+    const steps = L.steps.map((s, i) => `<div class="step ${i < at || (i === at && at === 3) ? "done" : i === at ? "now" : ""}">
+      <div class="dot"></div>${esc(s)}</div>`).join("");
+    const media = `/media?t=${encodeURIComponent(token)}&case=${c.tracking_id}`;
+    return `<section class="card case">
+      <div class="head"><span class="id">${esc(c.tracking_id)}</span>
+        <span class="pill ${TONE[c.status] || ""}">${esc(d.labels[c.status])}</span>
+        <span class="muted">${when(c.created_at)}</span></div>
+      <div class="what">${esc(c.description)}</div>
+      <div class="muted">${esc(c.category ?? "?")} · ${esc(c.village ?? "?")} · ${L.withp}: ${esc(c.officer_post)}</div>
+      ${c.reopen_count ? `<div class="reopen">🔁 ${L.reopened(c.reopen_count)}</div>` : ""}
+      <div class="steps">${steps}</div>
+      ${c.status === "RESOLVED_PENDING" ? `<div class="action">🔔 ${L.act}</div>` : ""}
+      ${c.status === "REJECTED" ? `<div class="action">🚫 ${esc(c.spam_reason || "")}<br>${
+        c.appeal_status === "pending" ? L.appealPending : c.appeal_status === "upheld" ? L.appealNo
+        : L.appealHint(c.tracking_id)}</div>` : ""}
+      ${c.has_proof ? `<div class="proof"><div class="muted">${L.proof}</div><img loading="lazy" src="${media}&kind=proof" alt=""></div>` : ""}
+      ${c.rating ? `<div class="muted" style="margin-top:8px">${L.rated}: ${"⭐".repeat(c.rating)}</div>` : ""}
+      <details><summary>${L.history}</summary>
+        ${c.media_type === "photo" ? `<div class="proof"><div class="muted">${L.yours}</div><img loading="lazy" src="${media}&kind=original" alt=""></div>` : ""}
+        ${c.media_type === "voice" ? `<div class="proof"><div class="muted">${L.voice}</div><audio controls preload="none" src="${media}&kind=original"></audio></div>` : ""}
+        <ul class="tl">${c.timeline.map((e) => `<li><b>${esc(d.labels[e.to_status] || e.to_status)}</b>
+          · ${esc(e.post)}${e.note ? ` <em>(${esc(e.note)})</em>` : ""}<div class="when">${when(e.at)}</div></li>`).join("")}</ul>
+      </details></section>`;
+  }).join("");
+}
+
+const $app = document.getElementById("app"), $who = document.getElementById("who");
+async function refresh() {
+  try {
+    const r = await fetch(`/api/citizen?t=${encodeURIComponent(token)}`, { cache: "no-store" });
+    const d = await r.json();
+    if (d.error) { $app.innerHTML = `<div class="card error">${esc(d.error)}</div>`; return; }
+    // Re-render only on change, so an open history or a playing voice note is not reset.
+    const key = JSON.stringify(d.cases);
+    if (key !== lastKey) { lastKey = key; render(d); }
+  } catch (e) { /* bot restarting */ }
+}
+refresh();
+setInterval(refresh, 5000);
+</script>
+</body>
+</html>
