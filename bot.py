@@ -152,7 +152,6 @@ async def alert_triage(case):
             f"📝 Issue: {case['description']}\n\n"
             "The AI could not decide who handles this. Tap the post to send it to:")
     rows = [[(p, f"tr:{tid}:{i}")] for i, p in enumerate(ALL_POSTS)]
-    rows.append([("🚫 Mark as spam", f"o:spam:{tid}")])
     await officer_bot().send_message(chat, text, reply_markup=kb(rows))
 
 
@@ -179,54 +178,7 @@ def officer_buttons(case, accepted=False):
     rows = [[first, ("⬆️ Escalate", f"o:esc:{tid}")]]
     if get_team(case["officer_post"]):
         rows.append([("⬇️ Assign to my team", f"o:dlg:{tid}")])
-    rows.append([("🚫 Mark as spam", f"o:spam:{tid}")])
     return kb(rows)
-
-
-def fmt_date(ts):
-    return time.strftime("%d %b %Y", time.localtime(ts))
-
-
-async def tell_citizen_spam(case, strikes, until):
-    if case["is_seed"]:
-        return
-    lang = lang_of(case["citizen_chat_id"])
-    tid = case["tracking_id"]
-    reason = t(lang, f"spam_{case['spam_reason']}")
-    text = t(lang, "spam_marked", tid=tid, reason=reason)
-    if until:
-        text += "\n\n" + t(lang, "banned", until=fmt_date(until))
-    else:
-        text += "\n\n" + t(lang, "spam_warning", n=strikes, max=cases.SPAM_BAN_THRESHOLD)
-    text += "\n\n" + t(lang, "appeal_hint", tid=tid)
-    await APP.bot.send_message(case["citizen_chat_id"], text)
-
-
-async def send_appeal_to_reviewer(case):
-    """The senior of the officer who marked the spam decides. Without one, the DC dashboard does."""
-    reviewer = cases.appeal_reviewer(case)
-    chat = officer_chat(reviewer) if reviewer else None
-    if not chat:
-        return
-    tid = case["tracking_id"]
-    text = (f"⚖️ Spam appeal: {tid}\n"
-            f"Marked as spam by {case['spam_by']}: {cases.SPAM_REASONS.get(case['spam_reason'])}\n"
-            f"📍 {case['village'] or '?'} · 📂 {case['category'] or '?'}\n"
-            f"📝 {case['description']}\n\n"
-            "The citizen says this is a real complaint. Your decision:")
-    await officer_bot().send_message(chat, text, reply_markup=kb([
-        [("✅ Real complaint: restore it", f"ap:ok:{tid}")],
-        [("❌ Spam: keep the mark", f"ap:no:{tid}")],
-    ]))
-
-
-async def announce_appeal_result(case, restored):
-    lang = lang_of(case["citizen_chat_id"])
-    if restored:
-        await APP.bot.send_message(case["citizen_chat_id"], t(lang, "appeal_ok", tid=case["tracking_id"]))
-        await alert_officer(case, header="↩️ Restored on appeal (not spam)")
-    else:
-        await APP.bot.send_message(case["citizen_chat_id"], t(lang, "appeal_no", tid=case["tracking_id"]))
 
 
 async def tell_citizen(case, key, **kwargs):
@@ -266,10 +218,6 @@ async def gate(update: Update, context: ContextTypes.DEFAULT_TYPE, item) -> bool
     """Make sure the citizen has chosen a language, consented, and given a name.
     If not, keep their message and start onboarding. Returns True when ready."""
     chat_id = update.effective_chat.id
-    until = cases.banned_until(chat_id)
-    if until:
-        await context.bot.send_message(chat_id, t(lang_of(chat_id), "banned_notice", until=fmt_date(until)))
-        return False
     citizen = db.get_citizen(chat_id)
     if not citizen or not citizen.get("consent_at"):
         if item:
@@ -718,20 +666,6 @@ async def on_officer_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
                                       reply_markup=officer_buttons(case, accepted=True))
             await tell_citizen(case, "accepted")
 
-        elif action == "spam":
-            await q.answer()
-            rows = [[(label, f"o:sp:{tid}:{key}")] for key, label in cases.SPAM_REASONS.items()]
-            rows.append([("↩ Back", f"o:back:{tid}")])
-            await q.edit_message_reply_markup(kb(rows))
-
-        elif action == "sp":
-            reason = parts[3]
-            case, strikes, until = cases.mark_spam(tid, reason)
-            await q.answer("Marked as spam")
-            await q.edit_message_text(q.message.text.split("\n\nThe AI")[0] +
-                                      f"\n\n🚫 You marked this as spam: {cases.SPAM_REASONS[reason]}.")
-            await tell_citizen_spam(case, strikes, until)
-
         elif action == "dlg":
             team = get_team(case["officer_post"])
             await q.answer()
@@ -750,12 +684,7 @@ async def on_officer_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         elif action == "back":
             await q.answer()
-            if case["status"] == "TRIAGE":  # back to the "Needs routing" buttons
-                rows = [[(p, f"tr:{tid}:{i}")] for i, p in enumerate(ALL_POSTS)]
-                rows.append([("🚫 Mark as spam", f"o:spam:{tid}")])
-                await q.edit_message_reply_markup(kb(rows))
-            else:
-                await q.edit_message_reply_markup(officer_buttons(case, accepted=case["status"] == "ACCEPTED"))
+            await q.edit_message_reply_markup(officer_buttons(case, accepted=case["status"] == "ACCEPTED"))
 
         elif action == "esc":
             await q.answer()
@@ -1151,54 +1080,6 @@ def dashboard_route(tracking_id, post):
     asyncio.run_coroutine_threadsafe(announce(), LOOP)
 
 
-async def cmd_appeal(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    chat_id = update.effective_chat.id
-    lang = lang_of(chat_id)
-    case = db.get_case(context.args[0]) if context.args else None
-    if not case or case["citizen_chat_id"] != chat_id or case["status"] != "REJECTED":
-        await update.message.reply_text(t(lang, "appeal_usage"))
-        return
-    if case["appeal_status"]:
-        await update.message.reply_text(t(lang, "appeal_done"))
-        return
-    case = cases.start_appeal(case["tracking_id"])
-    await update.message.reply_text(t(lang, "appeal_sent", tid=case["tracking_id"]))
-    await send_appeal_to_reviewer(case)
-
-
-async def on_appeal_decision(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    q = update.callback_query
-    _, decision, tid = q.data.split(":")
-    case = db.get_case(tid)
-    reviewer = cases.appeal_reviewer(case) if case else None
-    if not case or not reviewer or officer_chat(reviewer) != q.message.chat_id:
-        await q.answer("Not yours to decide", show_alert=True)
-        return
-    try:
-        case = cases.decide_appeal(tid, restore=decision == "ok")
-    except cases.InvalidTransition:
-        await q.answer("Already decided", show_alert=True)
-        await q.edit_message_reply_markup(None)
-        return
-    await q.answer("Saved")
-    await q.edit_message_text(q.message.text.split("\n\nThe citizen says")[0] +
-                              ("\n\n✅ Restored. The strike is removed." if decision == "ok"
-                               else "\n\n❌ Kept as spam."))
-    await announce_appeal_result(case, decision == "ok")
-
-
-def dashboard_appeal(tracking_id, restore):
-    """The DC decides an appeal from the dashboard."""
-    case = cases.decide_appeal(tracking_id, restore)
-    asyncio.run_coroutine_threadsafe(announce_appeal_result(case, restore), LOOP)
-
-
-def dashboard_unban(chat_id):
-    cases.lift_ban(chat_id)
-    asyncio.run_coroutine_threadsafe(
-        APP.bot.send_message(chat_id, t(lang_of(chat_id), "ban_lifted")), LOOP)
-
-
 def dashboard_tick(hours):
     db.advance_clock(hours)
     asyncio.run_coroutine_threadsafe(announce_sweep(cases.sweep()), LOOP)
@@ -1267,7 +1148,6 @@ def add_officer_handlers(app):
     app.add_handler(CallbackQueryHandler(on_officer_register, pattern=r"^op:"))
     app.add_handler(CallbackQueryHandler(on_triage_route, pattern=r"^tr:"))
     app.add_handler(CallbackQueryHandler(on_proof_pick, pattern=r"^pf:"))
-    app.add_handler(CallbackQueryHandler(on_appeal_decision, pattern=r"^ap:"))
 
 
 def build_apps():
@@ -1276,7 +1156,7 @@ def build_apps():
            .read_timeout(30).write_timeout(60).build())
     add_common_handlers(APP)
     for name, fn in [("start", cmd_start), ("help", cmd_help), ("language", cmd_language),
-                     ("status", cmd_status), ("stopdata", cmd_stopdata), ("appeal", cmd_appeal),
+                     ("status", cmd_status), ("stopdata", cmd_stopdata),
                      ("mydashboard", cmd_mydashboard)]:
         APP.add_handler(CommandHandler(name, fn))
     APP.add_handler(CallbackQueryHandler(on_language, pattern=r"^lang:"))
@@ -1354,8 +1234,6 @@ def main():
     build_apps()
     dashboard.HOOKS["route"] = dashboard_route
     dashboard.HOOKS["tick"] = dashboard_tick
-    dashboard.HOOKS["appeal"] = dashboard_appeal
-    dashboard.HOOKS["unban"] = dashboard_unban
     try:
         dashboard.start(DASHBOARD_PORT)
     except OSError:

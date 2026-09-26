@@ -23,27 +23,14 @@ MIN_CLOSED_FOR_SCORE = 10
 TRIAGE_CONFIDENCE = 0.6
 
 CLOSED = ("VERIFIED", "RESOLVED_UNVERIFIED")
-FINISHED = CLOSED + ("REJECTED",)   # no longer open; REJECTED = marked as spam
-
-# Spam: strikes within the window; at the threshold the citizen cannot file for BAN_DAYS (0 = permanent).
-SPAM_WINDOW_DAYS = 90
-SPAM_BAN_THRESHOLD = int(os.environ.get("SPAM_BAN_THRESHOLD", 3))
-SPAM_BAN_DAYS = float(os.environ.get("SPAM_BAN_DAYS", 30))
-SPAM_REASONS = {
-    "fake": "Fake / not a real problem",
-    "abusive": "Abusive language",
-    "duplicate": "Duplicate of another complaint",
-    "irrelevant": "Not a complaint (joke, ad, forward)",
-}
 
 ALLOWED = {
-    "TRIAGE": {"OPEN", "REJECTED"},
-    "REJECTED": {"OPEN"},                                # restored on appeal
-    "OPEN": {"ACCEPTED", "ESCALATED", "OPEN", "REJECTED"},       # OPEN -> OPEN = assigned down
-    "ACCEPTED": {"ESCALATED", "RESOLVED_PENDING", "OPEN", "REJECTED"},
-    "ESCALATED": {"ACCEPTED", "ESCALATED", "OPEN", "REJECTED"},
+    "TRIAGE": {"OPEN"},
+    "OPEN": {"ACCEPTED", "ESCALATED", "OPEN"},       # OPEN -> OPEN = assigned down
+    "ACCEPTED": {"ESCALATED", "RESOLVED_PENDING", "OPEN"},
+    "ESCALATED": {"ACCEPTED", "ESCALATED", "OPEN"},
     "RESOLVED_PENDING": {"VERIFIED", "REOPENED", "RESOLVED_UNVERIFIED"},
-    "REOPENED": {"ACCEPTED", "ESCALATED", "OPEN", "REJECTED"},
+    "REOPENED": {"ACCEPTED", "ESCALATED", "OPEN"},
     "VERIFIED": set(),
     "RESOLVED_UNVERIFIED": set(),
 }
@@ -180,67 +167,6 @@ def citizen_verdict(tracking_id, answer):
     return case, "reopened"
 
 
-def spam_strikes(chat_id):
-    """Spam marks against a citizen in the window, not counting ones overturned on appeal."""
-    since = db.now() - SPAM_WINDOW_DAYS * 86400
-    return sum(1 for c in db.all_cases()
-               if c["citizen_chat_id"] == chat_id and c["status"] == "REJECTED"
-               and c["appeal_status"] != "overturned" and c["updated_at"] >= since)
-
-
-def banned_until(chat_id):
-    """When a citizen's ban ends (a timestamp), or None if they may file complaints."""
-    until = (db.get_citizen(chat_id) or {}).get("banned_until")
-    return until if until and until > db.now() else None
-
-
-def mark_spam(tracking_id, reason):
-    """An officer rejects a complaint as spam. Returns (case, strikes, banned_until)."""
-    case = db.get_case(tracking_id)
-    by = case["officer_post"]
-    db.update_case(tracking_id, spam_reason=reason, spam_by=by, appeal_status=None)
-    case = _move(case, "REJECTED", "officer", note=f"Marked as spam: {SPAM_REASONS.get(reason, reason)}")
-    if case["is_seed"]:
-        return case, 0, None
-    strikes = spam_strikes(case["citizen_chat_id"])
-    until = None
-    if strikes >= SPAM_BAN_THRESHOLD:
-        until = db.now() + (SPAM_BAN_DAYS * 86400 if SPAM_BAN_DAYS > 0 else 100 * 365 * 86400)
-        db.upsert_citizen(case["citizen_chat_id"], banned_until=until)
-    return case, strikes, until
-
-
-def appeal_reviewer(case):
-    """The senior of the post that marked the spam (None: only the DC dashboard can decide)."""
-    return get_senior_post(case["spam_by"]) if case["spam_by"] else None
-
-
-def start_appeal(tracking_id):
-    db.update_case(tracking_id, appeal_status="pending")
-    return db.get_case(tracking_id)
-
-
-def decide_appeal(tracking_id, restore):
-    """Restore: the case reopens with the post that marked it, the strike is removed, and a ban
-    that no longer reaches the threshold is lifted. Otherwise the spam mark stands."""
-    case = db.get_case(tracking_id)
-    if case["status"] != "REJECTED" or case["appeal_status"] in ("upheld", "overturned"):
-        raise InvalidTransition(f"{tracking_id}: no open appeal")
-    if not restore:
-        db.update_case(tracking_id, appeal_status="upheld")
-        return db.get_case(tracking_id)
-    db.update_case(tracking_id, appeal_status="overturned")
-    case = _move(db.get_case(tracking_id), "OPEN", "triage", note="Spam mark overturned on appeal",
-                 new_post=case["spam_by"])
-    if spam_strikes(case["citizen_chat_id"]) < SPAM_BAN_THRESHOLD:
-        db.upsert_citizen(case["citizen_chat_id"], banned_until=None)
-    return case
-
-
-def lift_ban(chat_id):
-    db.upsert_citizen(chat_id, banned_until=None)
-
-
 def rate(tracking_id, rating):
     db.update_case(tracking_id, citizen_rating=int(rating))
 
@@ -284,8 +210,6 @@ def _post_metrics(post, cases_by_id, events):
 
     resolve_marks = [e for e in mine if e["to_status"] == "RESOLVED_PENDING"]
     reopens = [e for e in events if e["to_status"] == "REOPENED" and e["from_post"] == post]
-    spam_marked = [c for c in cases_by_id.values() if c["spam_by"] == post]
-    overturned = sum(1 for c in spam_marked if c["appeal_status"] == "overturned")
 
     # Closed cases are credited to the post that last marked them resolved.
     last_resolver = {}
@@ -308,8 +232,7 @@ def _post_metrics(post, cases_by_id, events):
     penalised = sum(1 for e in escalated_out if ESCALATION_REASONS.get(e["note"], ("", False))[1])
 
     confirmed_rate = (verified + 0.5 * unverified) / len(closed) if closed else 0
-    # A spam mark overturned on appeal counts like a reopen: the officer dismissed a real problem.
-    reopen_rate = (len(reopens) + overturned) / len(resolve_marks) if resolve_marks else (1 if overturned else 0)
+    reopen_rate = len(reopens) / len(resolve_marks) if resolve_marks else 0
     avg_rating = statistics.mean(ratings) if ratings else None
     ack_rate = acked / due if due else 1.0
     speed = statistics.mean(speed_scores) if speed_scores else 0
@@ -325,7 +248,7 @@ def _post_metrics(post, cases_by_id, events):
         ))
 
     open_now = sum(1 for c in cases_by_id.values()
-                   if c["officer_post"] == post and c["status"] not in FINISHED + ("TRIAGE",))
+                   if c["officer_post"] == post and c["status"] not in CLOSED + ("TRIAGE",))
     return {
         "post": post,
         "score": score,
@@ -336,8 +259,6 @@ def _post_metrics(post, cases_by_id, events):
         "confirmed_rate": round(confirmed_rate * 100),
         "median_days": round(statistics.median(days), 1) if days else None,
         "reopens": len(reopens),
-        "spam_marked": len(spam_marked),
-        "spam_overturned": overturned,
         "reopen_rate": round(reopen_rate * 100),
         "avg_rating": round(avg_rating, 1) if avg_rating else None,
         "ack_rate": round(ack_rate * 100),
@@ -407,7 +328,7 @@ def dashboard_stats():
         "clock_offset_hours": round(float(db.get_setting("clock_offset", 0)) / 3600),
         "totals": {
             "filed": len(cases),
-            "open": sum(1 for c in cases if c["status"] not in FINISHED),
+            "open": sum(1 for c in cases if c["status"] not in CLOSED),
             "verified": sum(1 for c in cases if c["status"] == "VERIFIED"),
             "avg_days": round(statistics.mean(days), 1) if days else None,
         },
@@ -416,7 +337,6 @@ def dashboard_stats():
         "feed": feed,
         "triage": triage,
         "posts": ALL_POSTS,
-        "spam": spam_overview(cases),
     }
 
 
@@ -424,22 +344,6 @@ def dashboard_stats():
 
 OPEN_STATES = ("OPEN", "ACCEPTED", "ESCALATED", "REOPENED", "RESOLVED_PENDING")
 
-
-def spam_overview(cases):
-    """Citizens with spam strikes, and appeals waiting for a decision (for the DC dashboard)."""
-    names = {c["chat_id"]: c for c in db.all_citizens()}
-    flagged = []
-    for chat_id in {c["citizen_chat_id"] for c in cases if c["status"] == "REJECTED" and not c["is_seed"]}:
-        strikes = spam_strikes(chat_id)
-        until = banned_until(chat_id)
-        if strikes or until:
-            name = (names.get(chat_id, {}).get("name") or "Citizen").split()[0]
-            flagged.append({"chat_id": chat_id, "name": name, "strikes": strikes, "banned_until": until})
-    appeals = [{"tracking_id": c["tracking_id"], "description": c["description"],
-                "reason": SPAM_REASONS.get(c["spam_reason"], c["spam_reason"]), "marked_by": c["spam_by"]}
-               for c in cases if c["status"] == "REJECTED" and c["appeal_status"] == "pending"]
-    return {"flagged": sorted(flagged, key=lambda f: -f["strikes"]), "appeals": appeals,
-            "threshold": SPAM_BAN_THRESHOLD}
 
 
 def _reason(note):
@@ -464,8 +368,6 @@ def citizen_view(chat_id):
             "reopen_count": c["reopen_count"],
             "rating": c["citizen_rating"],
             "has_proof": bool(db.last_proof(c["tracking_id"])),
-            "spam_reason": SPAM_REASONS.get(c["spam_reason"]) if c["status"] == "REJECTED" else None,
-            "appeal_status": c["appeal_status"],
             "media_type": c["media_type"],
             "timeline": [{"at": e["at"], "to_status": e["to_status"], "post": e["officer_post"],
                           "note": _reason(e["note"]) if e["to_status"] == "ESCALATED"
