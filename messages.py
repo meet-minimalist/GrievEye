@@ -60,48 +60,6 @@ TEXT = {
         "en": "✏️ No problem. Type what the problem is about, in your own words (for example: stray dogs, no water).",
     },
     "skip": {"kn": "⏭ ಬಿಟ್ಟುಬಿಡಿ", "en": "⏭ Skip"},
-    "spam_marked": {
-        "kn": "🚫 ನಿಮ್ಮ ದೂರು {tid} ಅನ್ನು ಅಧಿಕಾರಿ ನಿಜವಲ್ಲದ ದೂರು ಎಂದು ಗುರುತಿಸಿದ್ದಾರೆ.\nಕಾರಣ: {reason}",
-        "en": "🚫 The officer marked your complaint {tid} as not genuine.\nReason: {reason}",
-    },
-    "spam_fake": {"kn": "ನಕಲಿ / ನಿಜವಾದ ಸಮಸ್ಯೆಯಲ್ಲ", "en": "Fake / not a real problem"},
-    "spam_abusive": {"kn": "ಅವಾಚ್ಯ ಭಾಷೆ", "en": "Abusive language"},
-    "spam_duplicate": {"kn": "ಇನ್ನೊಂದು ದೂರಿನ ಪುನರಾವರ್ತನೆ", "en": "Duplicate of another complaint"},
-    "spam_irrelevant": {"kn": "ದೂರು ಅಲ್ಲ (ತಮಾಷೆ, ಜಾಹೀರಾತು, ಫಾರ್ವರ್ಡ್)", "en": "Not a complaint (joke, ad, forward)"},
-    "spam_warning": {
-        "kn": "⚠️ ಎಚ್ಚರಿಕೆ {n}/{max}: {max} ಬಾರಿ ಹೀಗೆ ಗುರುತಿಸಿದರೆ, ನೀವು ಸ್ವಲ್ಪ ಸಮಯ ದೂರು ನೀಡಲು ಸಾಧ್ಯವಿಲ್ಲ.",
-        "en": "⚠️ Warning {n} of {max}: at {max}, you will not be able to file complaints for a while.",
-    },
-    "banned": {
-        "kn": "⛔ ಹಲವು ದೂರುಗಳು ನಿಜವಲ್ಲವೆಂದು ಗುರುತಿಸಲಾಗಿದೆ. {until} ವರೆಗೆ ನೀವು ಹೊಸ ದೂರು ನೀಡಲು ಸಾಧ್ಯವಿಲ್ಲ.",
-        "en": "⛔ Too many of your complaints were marked as not genuine. You cannot file new complaints until {until}.",
-    },
-    "banned_notice": {
-        "kn": "⛔ {until} ವರೆಗೆ ನೀವು ಹೊಸ ದೂರು ನೀಡಲು ಸಾಧ್ಯವಿಲ್ಲ. ತುರ್ತು ಸಮಸ್ಯೆಗೆ ದಯವಿಟ್ಟು ಗ್ರಾಮ ಪಂಚಾಯಿತಿ ಕಚೇರಿಯನ್ನು ಸಂಪರ್ಕಿಸಿ.",
-        "en": "⛔ You cannot file new complaints until {until}. For an urgent problem, please contact the Gram Panchayat office.",
-    },
-    "ban_lifted": {"kn": "✅ ನೀವು ಮತ್ತೆ ದೂರು ನೀಡಬಹುದು.", "en": "✅ You can file complaints again."},
-    "appeal_hint": {
-        "kn": "ಇದು ತಪ್ಪು ಎಂದು ನಿಮಗೆ ಅನಿಸಿದರೆ, ಕಳುಹಿಸಿ: /appeal {tid}",
-        "en": "If you think this is wrong, send: /appeal {tid}",
-    },
-    "appeal_usage": {
-        "kn": "ಬಳಕೆ: /appeal GRV-KNK-XXXXX (ನಿಜವಲ್ಲ ಎಂದು ಗುರುತಿಸಿದ ನಿಮ್ಮ ದೂರು ಮಾತ್ರ)",
-        "en": "Usage: /appeal GRV-KNK-XXXXX (only for your complaints marked as not genuine)",
-    },
-    "appeal_done": {"kn": "ಈ ದೂರಿಗೆ ಈಗಾಗಲೇ ಮೇಲ್ಮನವಿ ಸಲ್ಲಿಸಲಾಗಿದೆ.", "en": "You have already appealed this complaint."},
-    "appeal_sent": {
-        "kn": "⚖️ {tid}: ನಿಮ್ಮ ಮೇಲ್ಮನವಿಯನ್ನು ಹಿರಿಯ ಅಧಿಕಾರಿಗೆ ಕಳುಹಿಸಲಾಗಿದೆ. ನಿರ್ಧಾರವನ್ನು ತಿಳಿಸುತ್ತೇವೆ.",
-        "en": "⚖️ {tid}: your appeal was sent to the senior officer. We will tell you the decision.",
-    },
-    "appeal_ok": {
-        "kn": "✅ {tid}: ಮೇಲ್ಮನವಿ ಸ್ವೀಕರಿಸಲಾಗಿದೆ. ನಿಮ್ಮ ದೂರು ಮತ್ತೆ ತೆರೆಯಲಾಗಿದೆ ಮತ್ತು ಎಚ್ಚರಿಕೆಯನ್ನು ತೆಗೆದುಹಾಕಲಾಗಿದೆ.",
-        "en": "✅ {tid}: your appeal was accepted. Your complaint is open again and the warning is removed.",
-    },
-    "appeal_no": {
-        "kn": "❌ {tid}: ಮೇಲ್ಮನವಿ ತಿರಸ್ಕರಿಸಲಾಗಿದೆ. ದೂರು ನಿಜವಲ್ಲ ಎಂಬ ಗುರುತು ಉಳಿಯುತ್ತದೆ.",
-        "en": "❌ {tid}: your appeal was not accepted. The complaint stays marked as not genuine.",
-    },
     "ask_location": {
         "kn": "📍 ಅಧಿಕಾರಿ ಸ್ಥಳವನ್ನು ಸುಲಭವಾಗಿ ಹುಡುಕಲು, ನೀವು ಸಮಸ್ಯೆಯ ಸ್ಥಳದಲ್ಲಿದ್ದರೆ ಕೆಳಗಿನ ಬಟನ್ ಒತ್ತಿ.\n"
               "ಇಲ್ಲದಿದ್ದರೆ ಹತ್ತಿರದ ಗುರುತಿನ ಸ್ಥಳ ಬರೆಯಿರಿ, ಅಥವಾ ಬಿಟ್ಟುಬಿಡಿ.",
@@ -179,7 +137,6 @@ STATUS_LABEL = {
     "REOPENED": {"kn": "ಮತ್ತೆ ತೆರೆಯಲಾಗಿದೆ", "en": "Reopened"},
     "VERIFIED": {"kn": "ಬಗೆಹರಿದಿದೆ (ನೀವು ದೃಢೀಕರಿಸಿದ್ದೀರಿ)", "en": "Resolved (confirmed by you)"},
     "RESOLVED_UNVERIFIED": {"kn": "ಬಗೆಹರಿದಿದೆ (ದೃಢೀಕರಿಸಿಲ್ಲ)", "en": "Resolved (not confirmed)"},
-    "REJECTED": {"kn": "ನಿಜವಲ್ಲದ ದೂರು ಎಂದು ಗುರುತಿಸಲಾಗಿದೆ", "en": "Marked as not genuine"},
 }
 
 

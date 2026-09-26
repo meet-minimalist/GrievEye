@@ -34,7 +34,7 @@ import database as db  # noqa: E402
 from messages import STATUS_LABEL  # noqa: E402
 from officer_directory import ALL_POSTS, get_senior_post  # noqa: E402
 
-HOOKS = {"route": None, "tick": None, "appeal": None, "unban": None}
+HOOKS = {"route": None, "tick": None}
 HERE = Path(__file__).parent
 PORT = int(os.environ.get("DASHBOARD_PORT", 8000))
 _media_cache = {}
@@ -256,10 +256,6 @@ class Handler(BaseHTTPRequestHandler):
                 HOOKS["route"](body["tracking_id"], body["post"])
             elif self.path == "/api/tick" and HOOKS["tick"]:
                 HOOKS["tick"](float(body.get("hours", 48)))
-            elif self.path == "/api/appeal" and HOOKS["appeal"]:
-                HOOKS["appeal"](body["tracking_id"], bool(body["restore"]))
-            elif self.path == "/api/unban" and HOOKS["unban"]:
-                HOOKS["unban"](int(body["chat_id"]))
             else:
                 return self._json({"error": "not found"}, 404)
             self._json({"ok": True})

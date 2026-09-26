@@ -23,8 +23,6 @@ After resolving, the officer can share their location. The system records how fa
 
 **5. The citizen has the final word.** They get the proof photo and either rate the officer from 1 to 5, which closes the case, or tap "Not fixed", which reopens it. A second "Not fixed" sends the case to the senior officer automatically.
 
-**Spam.** If a complaint is fake, abusive, a duplicate, or not a complaint at all, the officer can mark it as spam. The case closes and the citizen gets a warning. Three marks in 90 days and the citizen can't file anything for 30 days (both numbers are settings). Because an officer could also use this to get rid of work, the citizen can `/appeal`, and the officer's senior (or the DC) decides. A mark that is overturned is removed from the citizen's record and counts against the officer.
-
 **Time rules.** If nobody accepts a case within 48 hours, it moves up the chain on its own. If the citizen never replies after a resolution, the case closes as "unconfirmed" after 7 days and counts for less.
 
 ## Who sees what

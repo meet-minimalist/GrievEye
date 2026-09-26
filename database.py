@@ -88,15 +88,9 @@ def init_db():
             ("location_source", "TEXT"),       # pin (shared by the citizen) or photo (from EXIF)
             ("proof_lat", "REAL"), ("proof_lon", "REAL"),
             ("proof_distance_m", "REAL"),      # officer's proof location to the complaint location
-            ("spam_reason", "TEXT"),           # set when an officer marks the complaint as spam
-            ("spam_by", "TEXT"),               # the post that marked it
-            ("appeal_status", "TEXT"),         # None, pending, upheld, overturned
         ]:
             if column not in existing:
                 conn.execute(f"ALTER TABLE cases ADD COLUMN {column} {kind}")
-        citizen_cols = {r["name"] for r in conn.execute("PRAGMA table_info(citizens)")}
-        if "banned_until" not in citizen_cols:
-            conn.execute("ALTER TABLE citizens ADD COLUMN banned_until REAL")
 
 
 # ---------- demo clock ----------
@@ -145,11 +139,6 @@ def upsert_citizen(chat_id, **fields):
         conn.execute("INSERT OR IGNORE INTO citizens (chat_id) VALUES (?)", (chat_id,))
         for key, value in fields.items():
             conn.execute(f"UPDATE citizens SET {key} = ? WHERE chat_id = ?", (value, chat_id))
-
-
-def all_citizens():
-    with get_conn() as conn:
-        return [dict(r) for r in conn.execute("SELECT * FROM citizens").fetchall()]
 
 
 def withdraw_citizen(chat_id):
@@ -272,7 +261,7 @@ def cases_for_posts(posts, open_only=True):
     marks = ", ".join("?" for _ in posts)
     sql = f"SELECT * FROM cases WHERE officer_post IN ({marks})"
     if open_only:
-        sql += " AND status NOT IN ('VERIFIED', 'RESOLVED_UNVERIFIED', 'REJECTED')"
+        sql += " AND status NOT IN ('VERIFIED', 'RESOLVED_UNVERIFIED')"
     with get_conn() as conn:
         return [dict(r) for r in conn.execute(sql + " ORDER BY created_at", posts).fetchall()]
 

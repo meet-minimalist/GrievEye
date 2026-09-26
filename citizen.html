@@ -45,19 +45,15 @@ const T = {
         steps: ["Filed", "With officer", "Officer says fixed", "Confirmed by you"], history: "History",
         proof: "Officer's proof photo", yours: "Your photo", voice: "Your voice note", withp: "With",
         act: "The officer says this is fixed. Please answer Yes / Partly / No in Telegram.",
-        reopened: (n) => `You said "not fixed" ${n} time(s)`, rated: "Your rating",
-        appealHint: (id) => `If this is wrong, send /appeal ${id} to the bot.`,
-        appealPending: "Your appeal is with the senior officer.", appealNo: "Your appeal was not accepted." },
+        reopened: (n) => `You said "not fixed" ${n} time(s)`, rated: "Your rating" },
   kn: { mine: "ನನ್ನ ದೂರುಗಳು", none: "ನೀವು ಇನ್ನೂ ಯಾವುದೇ ದೂರು ನೀಡಿಲ್ಲ. ಟೆಲಿಗ್ರಾಂನಲ್ಲಿ ಬಾಟ್‌ಗೆ ಕಳುಹಿಸಿ.",
         steps: ["ದಾಖಲಾಗಿದೆ", "ಅಧಿಕಾರಿ ಬಳಿ", "ಬಗೆಹರಿದಿದೆ ಎಂದು ಅಧಿಕಾರಿ", "ನೀವು ದೃಢೀಕರಿಸಿದ್ದೀರಿ"], history: "ಇತಿಹಾಸ",
         proof: "ಅಧಿಕಾರಿಯ ಪುರಾವೆ ಫೋಟೋ", yours: "ನಿಮ್ಮ ಫೋಟೋ", voice: "ನಿಮ್ಮ ಧ್ವನಿ ಸಂದೇಶ", withp: "ಅಧಿಕಾರಿ",
         act: "ಸಮಸ್ಯೆ ಬಗೆಹರಿದಿದೆ ಎಂದು ಅಧಿಕಾರಿ ಹೇಳುತ್ತಾರೆ. ದಯವಿಟ್ಟು ಟೆಲಿಗ್ರಾಂನಲ್ಲಿ ಹೌದು / ಭಾಗಶಃ / ಇಲ್ಲ ಉತ್ತರಿಸಿ.",
-        reopened: (n) => `ನೀವು ${n} ಬಾರಿ "ಬಗೆಹರಿದಿಲ್ಲ" ಎಂದಿದ್ದೀರಿ`, rated: "ನಿಮ್ಮ ಅಂಕ",
-        appealHint: (id) => `ಇದು ತಪ್ಪಾಗಿದ್ದರೆ, ಬಾಟ್‌ಗೆ /appeal ${id} ಕಳುಹಿಸಿ.`,
-        appealPending: "ನಿಮ್ಮ ಮೇಲ್ಮನವಿ ಹಿರಿಯ ಅಧಿಕಾರಿಯ ಬಳಿ ಇದೆ.", appealNo: "ನಿಮ್ಮ ಮೇಲ್ಮನವಿ ತಿರಸ್ಕರಿಸಲಾಗಿದೆ." },
+        reopened: (n) => `ನೀವು ${n} ಬಾರಿ "ಬಗೆಹರಿದಿಲ್ಲ" ಎಂದಿದ್ದೀರಿ`, rated: "ನಿಮ್ಮ ಅಂಕ" },
 };
-const STEP = { REJECTED: 0, TRIAGE: 0, OPEN: 1, ESCALATED: 1, REOPENED: 1, ACCEPTED: 1, RESOLVED_PENDING: 2, VERIFIED: 3, RESOLVED_UNVERIFIED: 3 };
-const TONE = { REJECTED: "bad", REOPENED: "bad", ESCALATED: "bad", VERIFIED: "good", RESOLVED_PENDING: "warn", ACCEPTED: "warn" };
+const STEP = { TRIAGE: 0, OPEN: 1, ESCALATED: 1, REOPENED: 1, ACCEPTED: 1, RESOLVED_PENDING: 2, VERIFIED: 3, RESOLVED_UNVERIFIED: 3 };
+const TONE = { REOPENED: "bad", ESCALATED: "bad", VERIFIED: "good", RESOLVED_PENDING: "warn", ACCEPTED: "warn" };
 let lastKey = "";
 
 const when = (ts) => new Date(ts * 1000).toLocaleString([], { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
@@ -81,9 +77,6 @@ function render(d) {
       ${c.reopen_count ? `<div class="reopen">🔁 ${L.reopened(c.reopen_count)}</div>` : ""}
       <div class="steps">${steps}</div>
       ${c.status === "RESOLVED_PENDING" ? `<div class="action">🔔 ${L.act}</div>` : ""}
-      ${c.status === "REJECTED" ? `<div class="action">🚫 ${esc(c.spam_reason || "")}<br>${
-        c.appeal_status === "pending" ? L.appealPending : c.appeal_status === "upheld" ? L.appealNo
-        : L.appealHint(c.tracking_id)}</div>` : ""}
       ${c.has_proof ? `<div class="proof"><div class="muted">${L.proof}</div><img loading="lazy" src="${media}&kind=proof" alt=""></div>` : ""}
       ${c.rating ? `<div class="muted" style="margin-top:8px">${L.rated}: ${"⭐".repeat(c.rating)}</div>` : ""}
       <details><summary>${L.history}</summary>

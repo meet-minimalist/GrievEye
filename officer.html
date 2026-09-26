@@ -34,8 +34,7 @@ let post = params.get("post");
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 const STATUS = { OPEN: ["New", "warn"], ACCEPTED: ["Accepted", ""], ESCALATED: ["Escalated to you", "bad"],
   REOPENED: ["Reopened by citizen", "bad"], RESOLVED_PENDING: ["Waiting for citizen", "good"],
-  VERIFIED: ["Confirmed fixed", "good"], RESOLVED_UNVERIFIED: ["Closed, unconfirmed", ""],
-  REJECTED: ["Marked as spam", "bad"] };
+  VERIFIED: ["Confirmed fixed", "good"], RESOLVED_UNVERIFIED: ["Closed, unconfirmed", ""] };
 const pill = (s) => `<span class="pill ${STATUS[s]?.[1] || ""}">${STATUS[s]?.[0] || s}</span>`;
 const badge = (s) => s === null || s === undefined ? '<span class="score s-na">n/a</span>'
   : `<span class="score ${s >= 75 ? "s-good" : s >= 55 ? "s-warn" : "s-bad"}">${s}</span>`;

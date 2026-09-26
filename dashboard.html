@@ -109,7 +109,7 @@
         <th>Officer post</th><th class="num">Score</th><th class="num">Open</th>
         <th class="num">Closed</th><th class="num">Citizen-confirmed</th><th class="num">Reopens</th>
         <th class="num">Median days</th><th class="num">Rating</th><th class="num">Ack ≤48 h</th>
-        <th class="num">Escalated</th><th class="num" title="marked as spam / overturned on appeal">Spam</th>
+        <th class="num">Escalated</th>
       </tr></thead>
       <tbody id="score"></tbody>
     </table>
@@ -132,11 +132,6 @@
     <h2>Needs triage (AI not confident)</h2>
     <div id="triage"></div>
   </section>
-
-  <section class="card triage scroll">
-    <h2>Spam and bans</h2>
-    <div id="spam"></div>
-  </section>
 </main>
 
 <script>
@@ -145,11 +140,10 @@ const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<
 const LABEL = {
   OPEN: "Filed", TRIAGE: "Needs triage", ACCEPTED: "Accepted", ESCALATED: "Escalated",
   RESOLVED_PENDING: "Marked resolved", REOPENED: "Reopened by citizen", VERIFIED: "Confirmed fixed",
-  RESOLVED_UNVERIFIED: "Closed, unconfirmed", ASSIGNED: "Assigned down", REJECTED: "Marked as spam",
+  RESOLVED_UNVERIFIED: "Closed, unconfirmed", ASSIGNED: "Assigned down",
 };
 let previous = {};
 let lastTriage = "";
-let lastSpam = "";
 
 function scoreBadge(s) {
   if (s === null) return '<span class="score s-na">n/a</span>';
@@ -182,10 +176,8 @@ function render(d) {
       <td class="num">${r.closed ? r.confirmed_rate + "%" : "–"}</td>
       <td class="num">${r.reopens}</td><td class="num">${r.median_days ?? "–"}</td>
       <td class="num">${r.avg_rating ?? "–"}</td><td class="num">${r.ack_rate}%</td>
-      <td class="num" title="valid / penalised">${r.escalations_valid} / ${r.escalations_penalised}</td>
-      <td class="num" title="marked as spam / overturned on appeal">${r.spam_marked}${r.spam_overturned
-        ? ` / <span style="color:var(--bad)">${r.spam_overturned}</span>` : ""}</td></tr>`;
-  }).join("") || '<tr><td colspan="11" class="empty">No cases yet.</td></tr>';
+      <td class="num" title="valid / penalised">${r.escalations_valid} / ${r.escalations_penalised}</td></tr>`;
+  }).join("") || '<tr><td colspan="10" class="empty">No cases yet.</td></tr>';
 
   $("feed").innerHTML = d.feed.map((e) => `<li>
       <span class="id">${esc(e.tracking_id)}</span>
@@ -201,29 +193,6 @@ function render(d) {
       <span class="num">${v}</span></div>`).join("");
 
   // Only rebuild the triage table when it changes, so an open dropdown is not reset.
-  const spamKey = JSON.stringify(d.spam);
-  if (spamKey !== lastSpam) {
-    lastSpam = spamKey;
-    const s = d.spam;
-    const until = (ts) => new Date(ts * 1000).toLocaleDateString([], { day: "numeric", month: "short", year: "numeric" });
-    let html = "";
-    if (s.appeals.length) {
-      html += `<p><b>Appeals waiting</b> (citizen says it is a real complaint)</p><table><thead><tr><th>Case</th>
-        <th>Complaint</th><th>Marked by</th><th>Reason</th><th></th></tr></thead><tbody>` +
-        s.appeals.map((a) => `<tr><td>${esc(a.tracking_id)}</td><td>${esc(a.description)}</td><td>${esc(a.marked_by)}</td>
-          <td>${esc(a.reason)}</td><td><button data-appeal="${esc(a.tracking_id)}" data-restore="1">Restore</button>
-          <button data-appeal="${esc(a.tracking_id)}" data-restore="0">Keep spam</button></td></tr>`).join("") +
-        "</tbody></table>";
-    }
-    html += s.flagged.length ? `<p><b>Citizens with spam marks</b> (blocked at ${s.threshold})</p><table><thead><tr>
-        <th>Citizen</th><th class="num">Strikes (90 days)</th><th>Status</th><th></th></tr></thead><tbody>` +
-      s.flagged.map((f) => `<tr><td>${esc(f.name)}</td><td class="num">${f.strikes}</td>
-        <td>${f.banned_until ? `<span class="tag t-REOPENED">Blocked until ${until(f.banned_until)}</span>` : "Warned"}</td>
-        <td>${f.banned_until ? `<button data-unban="${f.chat_id}">Lift block</button>` : ""}</td></tr>`).join("") +
-      "</tbody></table>" : '<div class="empty">No citizen has been marked for spam.</div>';
-    $("spam").innerHTML = html;
-  }
-
   const triageKey = JSON.stringify(d.triage);
   if (triageKey !== lastTriage) {
     lastTriage = triageKey;
@@ -252,10 +221,6 @@ async function post(path, body) {
 }
 
 document.addEventListener("click", (ev) => {
-  const ap = ev.target.closest("button[data-appeal]");
-  if (ap) { ap.disabled = true; post("/api/appeal", { tracking_id: ap.dataset.appeal, restore: ap.dataset.restore === "1" }); return; }
-  const ub = ev.target.closest("button[data-unban]");
-  if (ub) { ub.disabled = true; post("/api/unban", { chat_id: ub.dataset.unban }); return; }
   const b = ev.target.closest("button[data-route]");
   if (b) {
     const id = b.dataset.route;
