@@ -1,0 +1,272 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GrievEye Dashboard</title>
+<style>
+  :root {
+    --bg: #f4f1ea; --panel: #ffffff; --ink: #1d1b16; --muted: #6b665c; --line: #e4dfd3;
+    --accent: #b4532a; --good: #2f7d4f; --warn: #b7791f; --bad: #b3261e; --flash: #fff1c2;
+    --bar: #d9c7a8;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #151412; --panel: #1f1d1a; --ink: #f1ede4; --muted: #a29b8e; --line: #34302a;
+      --accent: #e0835a; --good: #5dbb82; --warn: #e3b14f; --bad: #ef6a5f; --flash: #4a3f1c;
+      --bar: #6b5a3e;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font: 15px/1.4 "Segoe UI", system-ui, -apple-system, sans-serif;
+  }
+  header {
+    display: flex; align-items: baseline; gap: 16px; flex-wrap: wrap;
+    padding: 18px 24px 8px;
+  }
+  header h1 { margin: 0; font-size: 24px; letter-spacing: -0.01em; }
+  header h1 span { color: var(--accent); }
+  header .sub { color: var(--muted); }
+  header .right { margin-left: auto; display: flex; gap: 10px; align-items: center; color: var(--muted); }
+  .live { display: inline-flex; align-items: center; gap: 6px; }
+  .live::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--good);
+    animation: pulse 1.6s infinite; }
+  @keyframes pulse { 50% { opacity: .25; } }
+  button {
+    font: inherit; border: 1px solid var(--line); background: var(--panel); color: var(--ink);
+    padding: 6px 12px; border-radius: 8px; cursor: pointer;
+  }
+  button:hover { border-color: var(--accent); }
+  main { padding: 8px 24px 24px; display: grid; gap: 16px;
+    grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); }
+  .kpis { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 16px 18px; }
+  .kpi .n { font-size: 40px; font-weight: 700; line-height: 1.1; font-variant-numeric: tabular-nums; }
+  .kpi .l { color: var(--muted); }
+  h2 { margin: 0 0 10px; font-size: 15px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+  table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+  th, td { text-align: left; padding: 9px 8px; border-bottom: 1px solid var(--line); }
+  th { font-weight: 600; color: var(--muted); font-size: 13px; }
+  td.num, th.num { text-align: right; }
+  tr.flash td { animation: flash 2.5s ease-out; }
+  @keyframes flash { from { background: var(--flash); } to { background: transparent; } }
+  .score { display: inline-block; min-width: 46px; text-align: center; padding: 3px 8px; border-radius: 999px;
+    font-weight: 700; color: #fff; }
+  .s-good { background: var(--good); } .s-warn { background: var(--warn); } .s-bad { background: var(--bad); }
+  .s-na { background: transparent; color: var(--muted); font-weight: 400; border: 1px dashed var(--line); }
+  .side { display: grid; gap: 16px; align-content: start; }
+  .feed { list-style: none; margin: 0; padding: 0; }
+  .feed li { padding: 8px 0; border-bottom: 1px solid var(--line); }
+  .feed li:last-child { border-bottom: 0; }
+  .feed .id { font-weight: 600; }
+  .feed .when { color: var(--muted); font-size: 13px; }
+  .tag { display: inline-block; font-size: 12px; padding: 1px 8px; border-radius: 999px; border: 1px solid var(--line); }
+  .t-REOPENED, .t-ESCALATED { color: var(--bad); border-color: var(--bad); }
+  .t-VERIFIED { color: var(--good); border-color: var(--good); }
+  .t-RESOLVED_PENDING, .t-ACCEPTED, .t-ASSIGNED { color: var(--warn); border-color: var(--warn); }
+  .bars .row { display: grid; grid-template-columns: 110px 1fr 32px; gap: 8px; align-items: center; margin: 6px 0; }
+  .bars .track { background: var(--line); border-radius: 6px; height: 14px; overflow: hidden; }
+  .bars .fill { background: var(--bar); height: 100%; transition: width .6s; }
+  .triage { grid-column: 1 / -1; }
+  .triage select { font: inherit; padding: 5px; border-radius: 8px; border: 1px solid var(--line);
+    background: var(--panel); color: var(--ink); max-width: 100%; }
+  .empty { color: var(--muted); padding: 8px 0; }
+  .note { color: var(--muted); font-size: 13px; margin-top: 8px; }
+  @media (max-width: 900px) {
+    main { grid-template-columns: 1fr; padding: 8px 16px 16px; }
+    header { padding: 16px 16px 8px; }
+    .kpis { grid-template-columns: repeat(2, 1fr); }
+    .scroll { overflow-x: auto; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>Griev<span>Eye</span></h1>
+  <div class="sub">Kanakapura Taluk · Officer performance</div>
+  <div class="right">
+    <a href="/demo" style="color:var(--accent)">All views</a>
+    <span class="live">Live</span>
+    <span id="clock"></span>
+    <button id="tick" title="Demo only: move the clock ahead 48 hours and apply the deadline rules">+48 h</button>
+  </div>
+</header>
+
+<main>
+  <section class="kpis">
+    <div class="card kpi"><div class="n" id="k-filed">–</div><div class="l">Cases filed</div></div>
+    <div class="card kpi"><div class="n" id="k-open">–</div><div class="l">Open now</div></div>
+    <div class="card kpi"><div class="n" id="k-verified">–</div><div class="l">Fixed, confirmed by citizen</div></div>
+    <div class="card kpi"><div class="n" id="k-days">–</div><div class="l">Average days to resolve</div></div>
+  </section>
+
+  <section class="card scroll">
+    <h2>Officer scorecard</h2>
+    <table>
+      <thead><tr>
+        <th>Officer post</th><th class="num">Score</th><th class="num">Open</th>
+        <th class="num">Closed</th><th class="num">Citizen-confirmed</th><th class="num">Reopens</th>
+        <th class="num">Median days</th><th class="num">Rating</th><th class="num">Ack ≤48 h</th>
+        <th class="num">Escalated</th><th class="num" title="marked as spam / overturned on appeal">Spam</th>
+      </tr></thead>
+      <tbody id="score"></tbody>
+    </table>
+    <div class="note">Score = 35% citizen-confirmed · 25% speed vs. category target · 20% low reopens ·
+      10% rating · 10% acknowledged in 48 h. Shown after 10 closed cases. Valid escalations are not penalised.</div>
+  </section>
+
+  <div class="side">
+    <section class="card">
+      <h2>Live activity</h2>
+      <ul class="feed" id="feed"></ul>
+    </section>
+    <section class="card bars">
+      <h2>Cases by category</h2>
+      <div id="bars"></div>
+    </section>
+  </div>
+
+  <section class="card triage scroll">
+    <h2>Needs triage (AI not confident)</h2>
+    <div id="triage"></div>
+  </section>
+
+  <section class="card triage scroll">
+    <h2>Spam and bans</h2>
+    <div id="spam"></div>
+  </section>
+</main>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const LABEL = {
+  OPEN: "Filed", TRIAGE: "Needs triage", ACCEPTED: "Accepted", ESCALATED: "Escalated",
+  RESOLVED_PENDING: "Marked resolved", REOPENED: "Reopened by citizen", VERIFIED: "Confirmed fixed",
+  RESOLVED_UNVERIFIED: "Closed, unconfirmed", ASSIGNED: "Assigned down", REJECTED: "Marked as spam",
+};
+let previous = {};
+let lastTriage = "";
+let lastSpam = "";
+
+function scoreBadge(s) {
+  if (s === null) return '<span class="score s-na">n/a</span>';
+  const cls = s >= 75 ? "s-good" : s >= 55 ? "s-warn" : "s-bad";
+  return `<span class="score ${cls}">${s}</span>`;
+}
+
+function ago(at, now) {
+  const m = Math.round((now - at) / 60);
+  if (m < 1) return "just now";
+  if (m < 60) return `${m} min ago`;
+  const h = Math.round(m / 60);
+  return h < 48 ? `${h} h ago` : `${Math.round(h / 24)} days ago`;
+}
+
+function render(d) {
+  $("k-filed").textContent = d.totals.filed;
+  $("k-open").textContent = d.totals.open;
+  $("k-verified").textContent = d.totals.verified;
+  $("k-days").textContent = d.totals.avg_days ?? "–";
+  $("clock").textContent = d.clock_offset_hours ? `Demo clock +${d.clock_offset_hours} h` : "";
+
+  $("score").innerHTML = d.scorecard.map((r) => {
+    const key = JSON.stringify(r);
+    const changed = previous[r.post] && previous[r.post] !== key;
+    previous[r.post] = key;
+    return `<tr class="${changed ? "flash" : ""}">
+      <td>${esc(r.post)}</td><td class="num">${scoreBadge(r.score)}</td>
+      <td class="num">${r.open}</td><td class="num">${r.closed}</td>
+      <td class="num">${r.closed ? r.confirmed_rate + "%" : "–"}</td>
+      <td class="num">${r.reopens}</td><td class="num">${r.median_days ?? "–"}</td>
+      <td class="num">${r.avg_rating ?? "–"}</td><td class="num">${r.ack_rate}%</td>
+      <td class="num" title="valid / penalised">${r.escalations_valid} / ${r.escalations_penalised}</td>
+      <td class="num" title="marked as spam / overturned on appeal">${r.spam_marked}${r.spam_overturned
+        ? ` / <span style="color:var(--bad)">${r.spam_overturned}</span>` : ""}</td></tr>`;
+  }).join("") || '<tr><td colspan="11" class="empty">No cases yet.</td></tr>';
+
+  $("feed").innerHTML = d.feed.map((e) => `<li>
+      <span class="id">${esc(e.tracking_id)}</span>
+      <span class="tag t-${e.to_status}">${LABEL[e.to_status] || e.to_status}</span><br>
+      ${esc(e.category)}${e.village ? " · " + esc(e.village) : ""} → ${esc(e.post)}
+      ${e.note && e.to_status === "ESCALATED" ? "<br><em>" + esc(e.note) + "</em>" : ""}
+      <div class="when">${ago(e.at, d.now)}</div></li>`).join("")
+    || '<li class="empty">Waiting for the first message…</li>';
+
+  const max = Math.max(1, ...Object.values(d.by_category));
+  $("bars").innerHTML = Object.entries(d.by_category).map(([k, v]) => `<div class="row">
+      <span>${esc(k)}</span><div class="track"><div class="fill" style="width:${(v / max) * 100}%"></div></div>
+      <span class="num">${v}</span></div>`).join("");
+
+  // Only rebuild the triage table when it changes, so an open dropdown is not reset.
+  const spamKey = JSON.stringify(d.spam);
+  if (spamKey !== lastSpam) {
+    lastSpam = spamKey;
+    const s = d.spam;
+    const until = (ts) => new Date(ts * 1000).toLocaleDateString([], { day: "numeric", month: "short", year: "numeric" });
+    let html = "";
+    if (s.appeals.length) {
+      html += `<p><b>Appeals waiting</b> (citizen says it is a real complaint)</p><table><thead><tr><th>Case</th>
+        <th>Complaint</th><th>Marked by</th><th>Reason</th><th></th></tr></thead><tbody>` +
+        s.appeals.map((a) => `<tr><td>${esc(a.tracking_id)}</td><td>${esc(a.description)}</td><td>${esc(a.marked_by)}</td>
+          <td>${esc(a.reason)}</td><td><button data-appeal="${esc(a.tracking_id)}" data-restore="1">Restore</button>
+          <button data-appeal="${esc(a.tracking_id)}" data-restore="0">Keep spam</button></td></tr>`).join("") +
+        "</tbody></table>";
+    }
+    html += s.flagged.length ? `<p><b>Citizens with spam marks</b> (blocked at ${s.threshold})</p><table><thead><tr>
+        <th>Citizen</th><th class="num">Strikes (90 days)</th><th>Status</th><th></th></tr></thead><tbody>` +
+      s.flagged.map((f) => `<tr><td>${esc(f.name)}</td><td class="num">${f.strikes}</td>
+        <td>${f.banned_until ? `<span class="tag t-REOPENED">Blocked until ${until(f.banned_until)}</span>` : "Warned"}</td>
+        <td>${f.banned_until ? `<button data-unban="${f.chat_id}">Lift block</button>` : ""}</td></tr>`).join("") +
+      "</tbody></table>" : '<div class="empty">No citizen has been marked for spam.</div>';
+    $("spam").innerHTML = html;
+  }
+
+  const triageKey = JSON.stringify(d.triage);
+  if (triageKey !== lastTriage) {
+    lastTriage = triageKey;
+    const options = d.posts.map((p) => `<option>${esc(p)}</option>`).join("");
+    $("triage").innerHTML = d.triage.length ? `<table><thead><tr><th>Case</th><th>Complaint</th>
+        <th>Village</th><th class="num">AI confidence</th><th>Route to</th><th></th></tr></thead><tbody>` +
+      d.triage.map((c) => `<tr><td>${esc(c.tracking_id)}</td><td>${esc(c.description)}</td>
+        <td>${esc(c.village ?? "?")}</td><td class="num">${Math.round(c.confidence * 100)}%</td>
+        <td><select id="sel-${c.tracking_id}">${options}</select></td>
+        <td><button data-route="${esc(c.tracking_id)}" data-suggest="${esc(c.suggested_post)}">Send</button></td></tr>`).join("") +
+      "</tbody></table>" : '<div class="empty">Nothing waiting. Every case was routed automatically.</div>';
+    d.triage.forEach((c) => { const s = $("sel-" + c.tracking_id); if (s) s.value = c.suggested_post; });
+  }
+}
+
+async function refresh() {
+  try {
+    const r = await fetch("/api/stats", { cache: "no-store" });
+    render(await r.json());
+  } catch (e) { /* bot restarting; try again next tick */ }
+}
+
+async function post(path, body) {
+  await fetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  refresh();
+}
+
+document.addEventListener("click", (ev) => {
+  const ap = ev.target.closest("button[data-appeal]");
+  if (ap) { ap.disabled = true; post("/api/appeal", { tracking_id: ap.dataset.appeal, restore: ap.dataset.restore === "1" }); return; }
+  const ub = ev.target.closest("button[data-unban]");
+  if (ub) { ub.disabled = true; post("/api/unban", { chat_id: ub.dataset.unban }); return; }
+  const b = ev.target.closest("button[data-route]");
+  if (b) {
+    const id = b.dataset.route;
+    b.disabled = true;
+    post("/api/route", { tracking_id: id, post: $("sel-" + id).value });
+  }
+});
+$("tick").addEventListener("click", () => post("/api/tick", { hours: 48 }));
+
+refresh();
+setInterval(refresh, 3000);
+</script>
+</body>
+</html>

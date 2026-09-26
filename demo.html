@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Demo Views</title>
+<link rel="stylesheet" href="/common.css">
+<style>
+  .wrap { max-width: 900px; margin: 0 auto; }
+  .list { display: grid; gap: 8px; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
+  .list a { display: block; padding: 12px 14px; border: 1px solid var(--line); border-radius: 10px;
+    text-decoration: none; color: var(--ink); background: var(--soft); }
+  .list a:hover { border-color: var(--accent); }
+  .list small { color: var(--muted); display: block; }
+</style>
+</head>
+<body>
+<header class="top"><h1>Griev<span>Eye</span></h1><div class="sub">Demo: open any role's view (this page works on the laptop only)</div></header>
+<div class="wrap" id="app"><div class="empty">Loading…</div></div>
+<script>
+const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+fetch("/api/demo").then((r) => r.json()).then((d) => {
+  const lvl = (l) => d.officers.filter((o) => o.level === l);
+  const block = (title, items, sub) => `<section class="card"><h2>${title}</h2><div class="list">${items.length
+    ? items.map((i) => `<a href="${i.url}" target="_blank">${esc(i.name || i.post)}<small>${sub(i)}</small></a>`).join("")
+    : '<div class="empty">None yet. File a complaint from Telegram first.</div>'}</div></section>`;
+  document.getElementById("app").innerHTML =
+    `<section class="card"><h2>DC / MLA</h2><div class="list"><a href="/" target="_blank">Taluk dashboard<small>All officers, triage queue, live activity</small></a></div></section>` +
+    block("Citizens", d.citizens, () => "My complaints, status, proof photos") +
+    block("Senior officers", lvl("senior"), () => "Escalated to me, team scorecard") +
+    block("Officers", lvl("officer"), () => "Queue, own score, cases assigned to my team") +
+    block("Field staff", lvl("field"), () => "Work assigned to me, own score") +
+    `<p class="muted">On a phone, people get their own private link with <b>/mydashboard</b> in Telegram.
+      Phones must be on the same Wi-Fi as this laptop (${esc(d.phone_base)}).</p>`;
+});
+</script>
+</body>
+</html>

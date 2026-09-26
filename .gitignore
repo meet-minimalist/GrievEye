@@ -216,3 +216,12 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# GrievEye
+.env
+.env.*
+!.env.example
+*.db
+*.db-shm
+*.db-wal
+out.txt

@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Officer Desk</title>
+<link rel="stylesheet" href="/common.css">
+<style>
+  .grid2 { display: grid; gap: 16px; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); }
+  .parts .row { display: grid; grid-template-columns: 170px 1fr 38px; gap: 8px; align-items: center; margin: 7px 0; }
+  .parts .row span:last-child { text-align: right; font-variant-numeric: tabular-nums; }
+  .inbox { border-color: var(--bad); }
+  .inbox h2 { color: var(--bad); }
+  tr.overdue td:first-child { box-shadow: inset 3px 0 0 var(--bad); }
+  .desc { max-width: 340px; }
+  .hint { font-size: 13px; color: var(--muted); margin-top: 8px; }
+  tr.flash td { animation: flash 2.5s ease-out; }
+  @keyframes flash { from { background: var(--flash); } to { background: transparent; } }
+  @media (max-width: 900px) { .grid2 { grid-template-columns: 1fr; } .parts .row { grid-template-columns: 130px 1fr 38px; } }
+</style>
+</head>
+<body>
+<header class="top">
+  <h1>Griev<span>Eye</span></h1>
+  <div class="sub" id="role">Officer desk</div>
+  <div class="right"><select id="post" aria-label="Post"></select></div>
+</header>
+<div class="wrap" id="app"><div class="empty">Loading…</div></div>
+
+<script>
+const params = new URLSearchParams(location.search);
+const token = params.get("t");
+let post = params.get("post");
+const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const STATUS = { OPEN: ["New", "warn"], ACCEPTED: ["Accepted", ""], ESCALATED: ["Escalated to you", "bad"],
+  REOPENED: ["Reopened by citizen", "bad"], RESOLVED_PENDING: ["Waiting for citizen", "good"],
+  VERIFIED: ["Confirmed fixed", "good"], RESOLVED_UNVERIFIED: ["Closed, unconfirmed", ""],
+  REJECTED: ["Marked as spam", "bad"] };
+const pill = (s) => `<span class="pill ${STATUS[s]?.[1] || ""}">${STATUS[s]?.[0] || s}</span>`;
+const badge = (s) => s === null || s === undefined ? '<span class="score s-na">n/a</span>'
+  : `<span class="score ${s >= 75 ? "s-good" : s >= 55 ? "s-warn" : "s-bad"}">${s}</span>`;
+const when = (ts) => new Date(ts * 1000).toLocaleString([], { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+const wait = (h) => h < 48 ? `${h} h` : `${Math.round(h / 24)} days`;
+let lastKey = "", seen = {};
+
+function caseRows(rows, withFrom) {
+  return rows.map((c) => {
+    const flash = seen[c.tracking_id] && seen[c.tracking_id] !== c.status;
+    seen[c.tracking_id] = c.status;
+    return `<tr class="${c.overdue ? "overdue" : ""} ${flash ? "flash" : ""}">
+      <td><b>${esc(c.tracking_id)}</b><br>${pill(c.status)}${c.restricted ? ' <span class="pill">🔒 Restricted</span>' : ""}</td>
+      <td class="desc">${esc(c.description)}<div class="muted">${esc(c.category ?? "?")} · ${esc(c.village ?? "?")} · ${esc(c.citizen)}</div>
+        ${withFrom && c.escalated_from ? `<div class="muted">From <b>${esc(c.escalated_from)}</b>: ${esc(c.escalation_reason)}</div>` : ""}
+        ${c.assigned_by ? `<div class="muted">📌 Assigned to you by <b>${esc(c.assigned_by)}</b></div>` : ""}
+        ${c.map ? `<div><a href="${esc(c.map)}" target="_blank" rel="noopener">🗺 Open location in Maps</a></div>` : ""}</td>
+      <td class="num">${c.age_days} d</td>
+      <td class="num">${c.overdue ? `<span class="pill bad">Overdue ${wait(c.waiting_hours)}</span>` : wait(c.waiting_hours)}</td>
+      <td class="num">${c.reopen_count ? `<span class="pill bad">${c.reopen_count}×</span>` : "–"}</td></tr>`;
+  }).join("");
+}
+
+const HEAD = `<thead><tr><th>Case</th><th>Issue</th><th class="num">Age</th><th class="num">Waiting</th><th class="num">Reopens</th></tr></thead>`;
+
+function render(d) {
+  const me = d.me || {};
+  document.getElementById("role").textContent = !d.senior_post ? "Senior officer desk"
+    : d.is_senior ? `Officer desk · team of ${d.team.length}` : "Field staff desk";
+  const overdue = d.queue.filter((c) => c.overdue).length;
+  let html = `<section class="kpis">
+      <div class="card kpi"><div class="n">${badge(me.score)}</div><div class="l">My score${me.score === null ? " (after 10 closed)" : ""}</div></div>
+      <div class="card kpi"><div class="n">${d.queue.length}</div><div class="l">Open with me</div></div>
+      <div class="card kpi"><div class="n" style="color:${overdue ? "var(--bad)" : "inherit"}">${overdue}</div><div class="l">Overdue (not accepted in 48 h)</div></div>
+      <div class="card kpi"><div class="n">${me.reopens ?? 0}</div><div class="l">Reopened by citizens</div></div>
+      <div class="card kpi"><div class="n">${me.avg_rating ?? "–"}</div><div class="l">Average citizen rating</div></div>
+    </section>`;
+
+  if (d.escalated_in.length) {
+    html += `<section class="card inbox scroll"><h2>⬆️ Escalated to me (${d.escalated_in.length})</h2>
+      <table>${HEAD}<tbody>${caseRows(d.escalated_in, true)}</tbody></table></section>`;
+  }
+
+  const others = d.queue.filter((c) => !d.escalated_in.includes(c) && !d.escalated_in.some((e) => e.tracking_id === c.tracking_id));
+  html += `<div class="grid2">
+    <section class="card scroll"><h2>My queue · oldest first</h2>
+      ${others.length ? `<table>${HEAD}<tbody>${caseRows(others, false)}</tbody></table>` : '<div class="empty">No open cases. Well done.</div>'}
+      <div class="hint">Accept, escalate, assign to your team and resolve from the Telegram alert for each case. To resolve, send a photo as proof.</div>
+    </section>
+    <section class="card parts"><h2>How my score is made</h2>
+      ${Object.entries(me.parts || {}).map(([k, v]) => `<div class="row"><span>${esc(k)}</span>
+        <div class="bar"><div style="width:${v}%"></div></div><span>${v}</span></div>`).join("")}
+      <div class="hint">${me.closed ?? 0} closed · ${me.verified ?? 0} confirmed by citizens · median ${me.median_days ?? "–"} days ·
+        escalations ${me.escalations_valid ?? 0} valid / ${me.escalations_penalised ?? 0} penalised</div>
+      ${d.senior_post ? `<div class="hint">My senior: <b>${esc(d.senior_post)}</b></div>` : ""}
+    </section></div>`;
+
+  if (d.assigned_down.length) {
+    html += `<section class="card scroll"><h2>⬇️ Assigned to my team, still open (${d.assigned_down.length})</h2>
+      <table><thead><tr><th>Case</th><th>Issue</th><th>Now with</th><th class="num">Waiting</th></tr></thead><tbody>
+      ${d.assigned_down.map((c) => `<tr class="${c.overdue ? "overdue" : ""}"><td><b>${esc(c.tracking_id)}</b><br>${pill(c.status)}</td>
+        <td class="desc">${esc(c.description)}<div class="muted">${esc(c.category ?? "?")} · ${esc(c.village ?? "?")}</div></td>
+        <td>${esc(c.officer_post)}</td>
+        <td class="num">${c.overdue ? `<span class="pill bad">Overdue ${wait(c.waiting_hours)}</span>` : wait(c.waiting_hours)}</td></tr>`).join("")}
+      </tbody></table><div class="hint">If a case is not accepted in 48 hours, it goes back up the chain automatically.</div></section>`;
+  }
+
+  if (d.is_senior) {
+    html += `<section class="card scroll"><h2>My team</h2><table><thead><tr><th>Post</th><th class="num">Score</th>
+        <th class="num">Open</th><th class="num">Overdue</th><th class="num">Closed</th><th class="num">Reopens</th>
+        <th class="num">Median days</th><th class="num">Ack ≤48 h</th><th class="num">Escalated to me</th></tr></thead><tbody>
+      ${d.team.map((r) => `<tr><td>${esc(r.post)}</td><td class="num">${badge(r.score)}</td><td class="num">${r.open}</td>
+        <td class="num">${r.overdue ? `<span class="pill bad">${r.overdue}</span>` : 0}</td><td class="num">${r.closed}</td>
+        <td class="num">${r.reopens}</td><td class="num">${r.median_days ?? "–"}</td><td class="num">${r.ack_rate}%</td>
+        <td class="num">${r.escalations_valid} / ${r.escalations_penalised}</td></tr>`).join("")}
+      </tbody></table><div class="hint">"Escalated to me" = valid / penalised. Penalised = overdue, or the citizen said "not fixed" twice.</div></section>
+      <section class="card scroll"><h2>Escalations from my team</h2>
+      ${d.escalation_log.length ? `<table><thead><tr><th>When</th><th>Case</th><th>From</th><th>Reason</th></tr></thead><tbody>
+        ${d.escalation_log.map((e) => `<tr><td>${when(e.at)}</td><td>${esc(e.tracking_id)}</td><td>${esc(e.from_post)}</td>
+          <td>${esc(e.reason)} ${e.penalised ? '<span class="pill bad">penalised</span>' : '<span class="pill">valid</span>'}</td></tr>`).join("")}
+        </tbody></table>` : '<div class="empty">No escalations from your team yet.</div>'}</section>`;
+  }
+
+  html += `<section class="card scroll"><h2>Recently closed by me</h2>
+    ${d.recent_closed.length ? `<table><thead><tr><th>Case</th><th>Issue</th><th>Result</th><th class="num">Rating</th></tr></thead><tbody>
+      ${d.recent_closed.map((c) => `<tr><td>${esc(c.tracking_id)}</td><td>${esc(c.category ?? "?")} · ${esc(c.village ?? "?")}</td>
+        <td>${pill(c.status)}${c.reopen_count ? ` <span class="muted">after ${c.reopen_count} reopen(s)</span>` : ""}
+          <div class="muted">${c.proof_distance ? "📍 Proof " + esc(c.proof_distance)
+            : c.proof_shared ? "📍 Proof location shared" : "📍 No proof location"}</div></td>
+        <td class="num">${c.rating ? "⭐".repeat(c.rating) : "–"}</td></tr>`).join("")}</tbody></table>`
+      : '<div class="empty">Nothing closed yet.</div>'}</section>`;
+  document.getElementById("app").innerHTML = html;
+}
+
+async function refresh() {
+  try {
+    const r = await fetch(`/api/officer?t=${encodeURIComponent(token)}${post ? "&post=" + encodeURIComponent(post) : ""}`, { cache: "no-store" });
+    const d = await r.json();
+    if (d.error) { document.getElementById("app").innerHTML = `<div class="card error">${esc(d.error)}</div>`; return; }
+    const sel = document.getElementById("post");
+    if (sel.options.length !== d.posts.length) {
+      sel.innerHTML = d.posts.map((p) => `<option>${esc(p)}</option>`).join("");
+      sel.style.display = d.posts.length > 1 ? "" : "none";
+    }
+    sel.value = d.post;
+    post = d.post;
+    const key = JSON.stringify(d);
+    if (key !== lastKey) { lastKey = key; render(d); }
+  } catch (e) { /* bot restarting */ }
+}
+document.getElementById("post").addEventListener("change", (e) => {
+  post = e.target.value; seen = {}; lastKey = "";
+  const u = new URL(location); u.searchParams.set("post", post); history.replaceState(null, "", u);
+  refresh();
+});
+refresh();
+setInterval(refresh, 4000);
+</script>
+</body>
+</html>
